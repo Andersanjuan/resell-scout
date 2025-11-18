@@ -6,11 +6,14 @@ For now, this only shows a simple menu and exits.
 Later, we will add real functionality here.
 """
 import requests
+from scout.listing import Listing # Importing listing module for future use
+from scout.mock_fetcher import fetch_mock_listings # Importing mock fetcher for future use
 
 def show_menu():
     print("=== AI Resell Scout ===") # Simple menu display
     print("1. Test internet connection - github API")
     print("2. Exit")
+    print("3. Fetch mock listings")
 
 
 def test_internet_connection():
@@ -36,17 +39,33 @@ def test_internet_connection():
 
     print()  # Blank line for better readability
 
+    example = Listing(
+        title="Sample Listing",
+        price=99.99,
+        url="https://example.com/listing/1"
+    )
+    print("\nExample Listing object created:")
+    print(example)
+    print()  # Blank line for better readability
+
 
 def main():
     while True:
         show_menu()
-        choice = input("Choose an option (1-2): ").strip()
+        choice = input("Choose an option (1-3): ").strip()
 
         if choice == "1":
             test_internet_connection()
         elif choice == "2":
             print("Goodbye.")
             break
+        elif choice == "3":
+            listings = fetch_mock_listings()
+            print("\nFetched Mock Listings:")
+            for item in listings:
+                print(item)
+                print("-" * 40)
+            print()  # Blank line for better readability
         else:
             print("Invalid option. Please choose 1 or 2.\n")
 
