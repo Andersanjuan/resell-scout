@@ -16,3 +16,13 @@ def naive_profit(listing: Listing) -> float:
     """
     market_value = listing.price
     return market_value - total_cost(listing)
+
+def sort_by_profit(listings):
+    """
+    Returns a new list of listings sorted by estimated profit (highest first).
+    """
+    return sorted(
+        listings,
+        key=lambda item: naive_profit(item),
+        reverse=True
+    )

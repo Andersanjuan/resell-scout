@@ -8,7 +8,7 @@ Later, we will add real functionality here.
 import requests
 from scout.listing import Listing # Importing listing module for future use
 from scout.mock_fetcher import fetch_mock_listings # Importing mock fetcher for future use\
-from scout.analyzer import total_cost, naive_profit # Importing analyzer functions for future use
+from scout.analyzer import sort_by_profit, total_cost, naive_profit # Importing analyzer functions for future use
 
 def show_menu():
     print("=== AI Resell Scout ===") # Simple menu display
@@ -16,6 +16,7 @@ def show_menu():
     print("2. Exit")
     print("3. Fetch mock listings")
     print("4. (Future) Analyze mock listings")
+    print("5. (Future) Sort mock listings by profit")
 
 
 def test_internet_connection():
@@ -54,7 +55,7 @@ def test_internet_connection():
 def main():
     while True:
         show_menu()
-        choice = input("Choose an option (1-4): ").strip()
+        choice = input("Choose an option (1-5): ").strip()
 
         if choice == "1":
             test_internet_connection()
@@ -82,6 +83,22 @@ def main():
              
                 print("-" * 40)
             print()  # Blank line for better readability
+        elif choice == "5":
+            listings = fetch_mock_listings()
+            sorted_listings = sort_by_profit(listings)
+            print("\nMock Listings Sorted by Estimated Profit (Highest First):")
+
+            for item in sorted_listings:
+                cost = total_cost(item)
+                profit = naive_profit(item)
+
+                print(f"Title: {item.title}")
+                print(f"  Market value: ${item.price:.2f}")
+                print(f"  Total cost: ${cost:.2f}")
+                print(f"  Estimated profit: ${profit:.2f}")
+                print("-" * 50)
+            print()  # Blank line for better readability
+            
         else:
             print("Invalid option. Please choose 1 or 2.\n")
 
