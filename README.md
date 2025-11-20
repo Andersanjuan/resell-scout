@@ -1,5 +1,4 @@
 # resell-scout
-# AI Resell Scout (Learning Project)
 
 Resell Scout is a learning project written in Python.  
 Its goal is to explore how AI and programmatic tools could help identify potentially profitable resale items by:
