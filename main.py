@@ -9,14 +9,16 @@ import requests
 from scout.listing import Listing # Importing listing module for future use
 from scout.mock_fetcher import fetch_mock_listings # Importing mock fetcher for future use\
 from scout.analyzer import sort_by_profit, total_cost, naive_profit # Importing analyzer functions for future use
+from scout.pipeline import run_pipeline # Importing pipeline for future use
 
 def show_menu():
     print("=== AI Resell Scout ===") # Simple menu display
     print("1. Test internet connection - github API")
     print("2. Exit")
     print("3. Fetch mock listings")
-    print("4. (Future) Analyze mock listings")
-    print("5. (Future) Sort mock listings by profit")
+    print("4. Analyze mock listings")
+    print("5. Sort mock listings by profit")
+    print("6. Run full pipeline")
 
 
 def test_internet_connection():
@@ -55,7 +57,7 @@ def test_internet_connection():
 def main():
     while True:
         show_menu()
-        choice = input("Choose an option (1-5): ").strip()
+        choice = input("Choose an option (1-6): ").strip()
 
         if choice == "1":
             test_internet_connection()
@@ -98,7 +100,18 @@ def main():
                 print(f"  Estimated profit: ${profit:.2f}")
                 print("-" * 50)
             print()  # Blank line for better readability
-            
+        elif choice == "6":
+            results = run_pipeline()
+            print("\nPipeline Results (Fetched, Analyzed, Ranked):")
+
+            for item in results:
+                print(f"Title: {item['title']}")
+                print(f"  Market Value: ${item['market_value']:.2f}")
+                print(f"  Total Cost: ${item['total_cost']:.2f}")
+                print(f"  Estimated Profit: ${item['profit']:.2f}")
+                print("-" * 50)
+            print()  # Blank line for better readability
+
         else:
             print("Invalid option. Please choose 1 or 2.\n")
 
