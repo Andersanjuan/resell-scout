@@ -1,7 +1,8 @@
 from scout.mock_fetcher import fetch_mock_listings
 from scout.analyzer import total_cost, naive_profit, sort_by_profit
 from scout.pipeline import run_pipeline
-from scout.listing import Listing 
+from scout.listing import Listing
+from scout.formatter import format_currency, print_table
 import requests
 
 def show_menu():
@@ -91,13 +92,21 @@ def run_app():
 
         elif choice == "6":
             results = run_pipeline()
+
             print("\nFull pipeline results:\n")
+
+            headers = ["Title", "Market Value", "Total Cost", "Profit"]
+            rows = []
+
             for r in results:
-                print(f"Title: {r['title']}")
-                print(f"  Market value: ${r['market_value']:.2f}")
-                print(f"  Total cost:   ${r['total_cost']:.2f}")
-                print(f"  Profit:       ${r['profit']:.2f}")
-                print("-" * 50)
+                rows.append([
+                    r["title"],
+                    format_currency(r["market_value"]),
+                    format_currency(r["total_cost"]),
+                    format_currency(r["profit"])
+                ])
+
+            print_table(rows, headers)
 
         else:
             print("Invalid option. Please choose 1–6.\n")
