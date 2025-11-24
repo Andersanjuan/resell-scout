@@ -135,13 +135,15 @@ def run_app():
 
             headers = ["Metric", "Value"]
             rows = [
-                ["Min",   format_currency(summary["min"])],
-                ["Q1",    format_currency(summary["q1"])],
-                ["Median",format_currency(summary["median"])],
-                ["Mean",  format_currency(summary["mean"])],
-                ["Q3",    format_currency(summary["q3"])],
-                ["Max",   format_currency(summary["max"])],
+                ["Min",          format_currency(summary["min"])],
+                ["Q1",           format_currency(summary["q1"])],
+                ["Median",       format_currency(summary["median"])],
+                ["Mean",         format_currency(summary["mean"])],
+                ["Trimmed mean", format_currency(summary["trimmed_mean"])],
+                ["Q3",           format_currency(summary["q3"])],
+                ["Max",          format_currency(summary["max"])],
             ]
+
 
             print_table(rows, headers)
             print()
@@ -198,6 +200,7 @@ def run_app():
                 ["eBay Q1", format_currency(summary["q1"])],
                 ["eBay median (used as market value)", format_currency(summary["median"])],
                 ["eBay mean", format_currency(summary["mean"])],
+                ["eBay trimmed mean", format_currency(summary["trimmed_mean"])],
                 ["eBay Q3", format_currency(summary["q3"])],
                 ["eBay max", format_currency(summary["max"])],
                 ["Your bid", format_currency(current_bid)],
@@ -206,9 +209,10 @@ def run_app():
                 ["Estimated profit (median - total)", format_currency(profit)],
             ]
 
+
             print_table(rows, headers)
             print()
 
 
         else:
-            print("Invalid option. Please choose 1–6.\n")
+            print("Invalid option. Please choose 1-8.\n")
