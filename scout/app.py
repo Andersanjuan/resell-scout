@@ -59,7 +59,7 @@ def test_internet_connection():
 def run_app():
      while True:
         show_menu()
-        choice = input("Choose an option (1-7): ").strip()
+        choice = input("Choose an option (1-8): ").strip()
 
         if choice == "1":
             test_internet_connection()

@@ -86,3 +86,14 @@ def summarize_prices(prices: List[float]) -> dict:
         "min": prices_sorted[0],
         "max": prices_sorted[-1],
     }
+
+def estimate_market_value(keyword: str, limit: int = 20) -> dict:
+    """
+    Convenience helper:
+    - fetches prices from eBay for a keyword
+    - summarizes them
+    Returns the full summary dict (min, q1, median, mean, q3, max, count).
+    """
+    prices = fetch_ebay_prices(keyword, limit=limit)
+    summary = summarize_prices(prices)
+    return summary
