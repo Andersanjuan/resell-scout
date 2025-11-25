@@ -41,11 +41,14 @@ def _get_ebay_token() -> str:
     return token
 
 
-def fetch_ebay_prices(keyword: str, limit: int = 20) -> List[float]:
+def fetch_ebay_prices(keyword: str, limit: int = 200, collect_debug: bool = False):
     """
     Query eBay Browse API for active listings matching the keyword.
-    Returns a list of item prices (floats).
+    Returns either:
+    - list of prices (if collect_debug is False), or
+    - (prices, debug_info) if collect_debug is True.
     """
+
     token = _get_ebay_token()
     url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
 
@@ -68,19 +71,58 @@ def fetch_ebay_prices(keyword: str, limit: int = 20) -> List[float]:
         )
 
     data = resp.json()
-    prices = []
+    prices: List[float] = []
+    kept = []
+    filtered = []
+
 
     for item in data.get("itemSummaries", []):
         price_info = item.get("price")
         title = item.get("title", "")
         condition = item.get("condition", "")
 
+        reason = None
+
         if not price_info:
+            reason = "no price"
+
+        elif is_suspicious_title(title):
+            reason = "suspicious / parts/broken title"
+
+        if reason is None:
+            try:
+                value = float(price_info["value"])
+            except (KeyError, ValueError, TypeError):
+                reason = "invalid price format"
+
+        if reason is not None:
+            if collect_debug:
+                filtered.append(
+                    {
+                        "title": title,
+                        "condition": condition,
+                        "reason": reason,
+                    }
+                )
             continue
 
-        # Filter out suspicious titles (likely broken / for parts)
-        if is_suspicious_title(title):
-            continue
+        # valid item
+        prices.append(value)
+        if collect_debug:
+            image = item.get("image") or {}
+            image_url = image.get("imageUrl")
+            item_url = item.get("itemWebUrl")
+
+            kept.append(
+                {
+                    "title": title,
+                    "condition": condition,
+                    "price": value,
+                    "image_url": image_url,
+                    "item_url": item_url,
+                }
+            )
+
 
         # Optional: light condition filter
         # You can choose to only keep "NEW" and "USED" if you want.
@@ -88,14 +130,38 @@ def fetch_ebay_prices(keyword: str, limit: int = 20) -> List[float]:
         # if condition and condition not in {"NEW", "USED"}:
         #     continue
 
-        try:
-            value = float(price_info["value"])
-            prices.append(value)
-        except (KeyError, ValueError, TypeError):
-            continue
+        if collect_debug:
+            debug_info = {
+                "kept": kept,
+                "filtered": filtered,
+            }
+            
+    return prices, debug_info
+
+    
 
 
-    return prices
+def trimmed_mean(prices: List[float], trim_fraction: float = 0.20) -> float:
+    """
+    Compute a trimmed mean by removing the lowest and highest
+    trim_fraction of values. For example, trim_fraction=0.20
+    drops the lowest 20% and highest 20% of prices.
+
+    If too few values exist to trim correctly, fallback to simple mean.
+    """
+    n = len(prices)
+    if n < 10:
+        # Not enough data for trimming; fallback to mean
+        return statistics.mean(prices)
+
+    prices_sorted = sorted(prices)
+
+    k = int(n * trim_fraction)
+    if k == 0:
+        return statistics.mean(prices_sorted)
+
+    trimmed = prices_sorted[k: n - k]
+    return statistics.mean(trimmed)
 
 
 def summarize_prices(prices: List[float]) -> dict:
@@ -114,7 +180,7 @@ def summarize_prices(prices: List[float]) -> dict:
     q1 = prices_sorted[n // 4]
     q3 = prices_sorted[(3 * n) // 4]
 
-    tmean = trimmed_mean(prices_sorted, trim_fraction=0.1)
+    tmean = trimmed_mean(prices_sorted, trim_fraction=0.2)
 
     return {
         "count": n,
@@ -128,7 +194,7 @@ def summarize_prices(prices: List[float]) -> dict:
     }
 
 
-def estimate_market_value(keyword: str, limit: int = 20) -> dict:
+def estimate_market_value(keyword: str, limit: int = 200) -> dict:
     """
     Convenience helper:
     - fetches prices from eBay for a keyword
@@ -139,21 +205,34 @@ def estimate_market_value(keyword: str, limit: int = 20) -> dict:
     summary = summarize_prices(prices)
     return summary
 
-def trimmed_mean(prices: list[float], trim_fraction: float = 0.1) -> float:
+
+
+def compute_confidence(summary: dict) -> str:
     """
-    Compute a trimmed mean by discarding a fraction of the lowest and highest prices.
-    For example, trim_fraction=0.1 drops 10% of values at each end.
+    Assign a confidence level based on:
+    - sample size
+    - interquartile spread
     """
-    if not prices:
-        raise EbayPricingError("No prices for trimmed mean.")
 
-    sorted_prices = sorted(prices)
-    n = len(sorted_prices)
-    k = int(n * trim_fraction)
+    n = summary["count"]
+    q1 = summary["q1"]
+    q3 = summary["q3"]
+    median = summary["median"]
 
-    # If there are too few prices, just fall back to normal mean
-    if n <= 2 * k:
-        return statistics.mean(sorted_prices)
+    # Avoid division by zero
+    if median == 0:
+        return "Low"
 
-    trimmed = sorted_prices[k : n - k]
-    return statistics.mean(trimmed)
+    # Calculate spread ratio
+    spread_ratio = (q3 - q1) / median
+
+    # High Confidence
+    if n >= 30 and spread_ratio <= 0.35:
+        return "High"
+
+    # Medium Confidence
+    if n >= 10 and spread_ratio <= 0.7:
+        return "Medium"
+
+    # Low Confidence otherwise
+    return "Low"

@@ -1,3 +1,7 @@
+import requests
+import os
+import re
+
 from scout.mock_fetcher import fetch_mock_listings
 from scout.analyzer import total_cost, naive_profit, sort_by_profit
 from scout.pipeline import run_pipeline
@@ -8,9 +12,9 @@ from scout.pricing import (
     summarize_prices,
     estimate_market_value,
     EbayPricingError,
+    compute_confidence
 )
 from scout.formatter import format_currency, print_table
-import requests
 
 def show_menu():
     print("=== AI Resell Scout ===") # Simple menu display
@@ -22,7 +26,7 @@ def show_menu():
     print("6. Run full pipeline")
     print("7. Estimate market price from eBay for a keyword")
     print("8. Evaluate a candidate auction vs eBay prices")
-
+    print("9. Show 10 listings closest to median and download their images")
 
 def test_internet_connection():
     """
@@ -59,7 +63,7 @@ def test_internet_connection():
 def run_app():
      while True:
         show_menu()
-        choice = input("Choose an option (1-8): ").strip()
+        choice = input("Choose an option (1-9): ").strip()
 
         if choice == "1":
             test_internet_connection()
@@ -119,13 +123,21 @@ def run_app():
             print_table(rows, headers)
         
         elif choice == "7":
-            keyword = input("Enter a keyword to search on eBay (e.g., 'Nintendo DS Lite'): ").strip()
+            keyword = input("Enter a keyword for eBay search (e.g., 'Nintendo DS Lite'): ").strip()
             if not keyword:
                 print("Keyword cannot be empty.\n")
                 continue
 
+            debug_choice = input("Show debug listing info? (y/n): ").strip().lower()
+            debug_mode = debug_choice == "y"
+
             try:
-                prices = fetch_ebay_prices(keyword)
+                if debug_mode:
+                    prices, debug_info = fetch_ebay_prices(keyword, collect_debug=True)
+                else:
+                    prices = fetch_ebay_prices(keyword)
+                    debug_info = None
+
                 summary = summarize_prices(prices)
             except EbayPricingError as e:
                 print(f"Error while fetching prices: {e}\n")
@@ -142,11 +154,38 @@ def run_app():
                 ["Trimmed mean", format_currency(summary["trimmed_mean"])],
                 ["Q3",           format_currency(summary["q3"])],
                 ["Max",          format_currency(summary["max"])],
+                ["Confidence",   compute_confidence(summary)],
             ]
-
 
             print_table(rows, headers)
             print()
+
+            # If debug_mode, show a small table of kept and filtered listings
+            if debug_mode and debug_info is not None:
+                print("Debug: kept listings (first 10):\n")
+                kept = debug_info["kept"][:10]
+                if kept:
+                    kept_headers = ["Title", "Condition", "Price"]
+                    kept_rows = [
+                        [item["title"], item["condition"], format_currency(item["price"])]
+                        for item in kept
+                    ]
+                    print_table(kept_rows, kept_headers)
+                else:
+                    print("(No kept listings.)\n")
+
+                print("Debug: filtered listings (first 10):\n")
+                filtered = debug_info["filtered"][:10]
+                if filtered:
+                    filtered_headers = ["Title", "Condition", "Reason"]
+                    filtered_rows = [
+                        [item["title"], item["condition"], item["reason"]]
+                        for item in filtered
+                    ]
+                    print_table(filtered_rows, filtered_headers)
+                else:
+                    print("(No filtered listings.)\n")
+
 
         elif choice == "8":
             # 1. Get keyword to describe the item
@@ -203,6 +242,7 @@ def run_app():
                 ["eBay trimmed mean", format_currency(summary["trimmed_mean"])],
                 ["eBay Q3", format_currency(summary["q3"])],
                 ["eBay max", format_currency(summary["max"])],
+                ["eBay confidence score", compute_confidence(summary)],
                 ["Your bid", format_currency(current_bid)],
                 ["Shipping", format_currency(shipping_cost)],
                 ["Total cost (bid + shipping)", format_currency(total)],
@@ -213,6 +253,79 @@ def run_app():
             print_table(rows, headers)
             print()
 
+        elif choice == "9":
+            keyword = input(
+                "Enter a keyword for which to inspect median-neighborhood listings: "
+            ).strip()
+            if not keyword:
+                print("Keyword cannot be empty.\n")
+                continue
+
+            try:
+                prices, debug_info = fetch_ebay_prices(keyword, collect_debug=True)
+                summary = summarize_prices(prices)
+            except EbayPricingError as e:
+                print(f"Error while fetching prices: {e}\n")
+                continue
+
+            kept = debug_info.get("kept", [])
+            if not kept:
+                print("No usable listings found for this keyword after filtering.\n")
+                continue
+
+            median = summary["median"]
+
+            # Sort kept listings by distance from median price
+            kept_sorted = sorted(kept, key=lambda item: abs(item["price"] - median))
+            closest = kept_sorted[:10]
+
+            # Ensure images/ directory exists
+            images_dir = "images"
+            os.makedirs(images_dir, exist_ok=True)
+
+            # Create a safe prefix for filenames from the keyword
+            safe_keyword = re.sub(r"[^a-zA-Z0-9_-]+", "_", keyword.lower())[:30]
+
+            # Download first images
+            for idx, item in enumerate(closest, start=1):
+                img_url = item.get("image_url")
+                if not img_url:
+                    item["image_file"] = "(no image URL)"
+                    continue
+
+                try:
+                    resp = requests.get(img_url, timeout=15)
+                    if resp.status_code == 200:
+                        filename = os.path.join(images_dir, f"{safe_keyword}_{idx}.jpg")
+                        with open(filename, "wb") as f:
+                            f.write(resp.content)
+                        item["image_file"] = filename
+                    else:
+                        item["image_file"] = f"(HTTP {resp.status_code})"
+                except requests.RequestException:
+                    item["image_file"] = "(download error)"
+
+            # Display a table of the selected listings
+            print("\nListings closest to median price (up to 10):\n")
+
+            headers = ["Title", "Condition", "Price", "Item URL", "Image file"]
+            rows = []
+            for item in closest:
+                rows.append(
+                    [
+                        item["title"],
+                        item["condition"],
+                        format_currency(item["price"]),
+                        item.get("item_url") or "",
+                        item.get("image_file") or "",
+                    ]
+                )
+
+            print_table(rows, headers)
+            print(
+                f"\nImages (if downloaded successfully) are saved in the '{images_dir}' folder.\n"
+            )
+
 
         else:
-            print("Invalid option. Please choose 1-8.\n")
+            print("Invalid option. Please choose 1-9.\n")
